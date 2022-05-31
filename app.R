@@ -7,25 +7,30 @@ library(rtracklayer)
 library(DT)
 library(matrixStats)
 library(shinybusy)
+library(data.table)
+library(shinyjs)
 
 # Make a list of genomes where we have metadata, CDS and states
-cds_data <- list.files("files/tsv_renamed/")
-cds_data_filename <-
-  substr(cds_data, 1, nchar(cds_data) - 4) # get rid of file ending
-annot <- readRDS("files/bacteria_viral_1_1_metadata.Rds")
-annot$filename2 <-
-  substr(annot$filename, 1, nchar(annot$filename) - 6) # get rid of file ending
-state_data <- list.files("files/density_500_1")
+#cds_data <- list.files("files/tsv_renamed/")
+#cds_data_filename <-
+#  substr(cds_data, 1, nchar(cds_data) - 4) # get rid of file ending
+
+#annot <- readRDS("files/bacteria_viral_1_1_metadata.Rds")
+#annot$filename2 <-
+#  substr(annot$filename, 1, nchar(annot$filename) - 6) # get rid of file ending
+state_data <- list.files("dgx_train/")
 state_data_filename <-
   substr(state_data, 1, nchar(state_data) - 9) # get rid of file ending
-state_data_filename %in% cds_data_filename
-sample_list <-
-  state_data_filename[which(state_data_filename %in% cds_data_filename)]
+
+#sample_list <-
+#  state_data_filename[which(state_data_filename %in% cds_data_filename)]
+
 gff_data <- list.files("before_2008_gff")
 gff_data_filename <-
-  substr(gff_data, 1, nchar(state_data) - 4) # get rid of file ending
+  substr(gff_data, 1, nchar(gff_data) - 4) # get rid of file ending
+
 sample_list <-
-  sample_list[which(sample_list %in% gff_data_filename)]
+  state_data_filename[which(state_data_filename %in% gff_data_filename)]
 
 # cosine distance function for loci to genome
 distFun <- function(genome, sequence) {
@@ -37,7 +42,6 @@ distFun <- function(genome, sequence) {
     sum(genome[seq.int(offset, length.out = slen), , drop = FALSE] * sequence) / slen
   }, FUN.VALUE = numeric(1))
 }
-
 
 distFunL <- function(genome, sequence, lval = 1) {
   genome <- t(genome)
@@ -52,7 +56,9 @@ distFunL <- function(genome, sequence, lval = 1) {
 
 
 ui <- navbarPage("GenomeNet Search",
-                 tabPanel("Precalculated DB",
+                 useShinyjs(),
+                 inlineCSS(list("table" = "font-size: 9px")),
+                 tabPanel("Search based on precalculated data",
                           sidebarLayout(
                             sidebarPanel(
                               width = 5,
@@ -88,7 +94,7 @@ ui <- navbarPage("GenomeNet Search",
                           )
                           ),
     
-                 tabPanel("Upload own data",
+                 tabPanel("Upload data",
                           sidebarPanel(
                             width = 5,
 
@@ -115,19 +121,7 @@ ui <- navbarPage("GenomeNet Search",
                             add_busy_bar(color = "#000000")
                             
                           )
-                 ),
-                 tabPanel("Comparison",
-                          sidebarPanel(
-                            width = 5,
-                            helpText("First step: select a genome"),
-                            selectInput("genome", "Choose a genome:", unique(sample_list))),
-                          mainPanel(
-                            width = 7,
-                            helpText("Results go here"),
-                            plotlyOutput("densityPlot")
-                          )
-                          
-                 ),
+                 )
                  )
 
 ################################################################################
@@ -144,7 +138,7 @@ server <- function(input, output, session) {
   })
   
   statesData <- reactive({
-    file <- paste0("files/density_500_1/", input$genome, ".fasta.h5")
+    file <- paste0("dgx_train/", input$genome, ".fasta.h5")
     states <-
       deepG::readRowsFromH5(
         h5_path = file,
@@ -155,11 +149,11 @@ server <- function(input, output, session) {
     df
   })
   
-  annotData <- reactive({
-    file <- paste0("files/tsv_renamed/", input$genome, ".tsv")
-    annot <- read.csv2(file, sep = "\t", stringsAsFactors = F)
-    annot
-  })
+#  annotData <- reactive({
+#    file <- paste0("files/tsv_renamed/", input$genome, ".tsv")
+#    annot <- read.csv2(file, sep = "\t", stringsAsFactors = F)
+#    annot
+ # })
   
   
   ################################################################################
@@ -167,7 +161,7 @@ server <- function(input, output, session) {
   output$gfftable <-
     DT::renderDataTable(
       selection = 'single',
-      options = list(searchHighlight = TRUE),
+      options = list(searchHighlight = TRUE, lengthMenu = c(5, 10), pageLength = 10, scrollX = TRUE),
       filter = 'top',
       {
         dat <- gffData()
@@ -411,7 +405,7 @@ server <- function(input, output, session) {
  # Show the full GFF table
   output$gfftable2 <-  DT::renderDataTable(
      selection = 'single',
-     options = list(searchHighlight = TRUE),
+     options = list(searchHighlight = TRUE, lengthMenu = c(5, 10), pageLength = 10, scrollX = TRUE),
      filter = 'top',
      {
        req(uploadedGffData())
